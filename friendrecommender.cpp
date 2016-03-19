@@ -12,7 +12,8 @@
 #include <set>
 #include <vector>
 #include <map>
-
+#include <algorithm>
+#include <iterator>
 
 // Global variables
 unsigned int threshold = 0;	// m value
@@ -28,9 +29,48 @@ HashedAdjacentList hashedList;
 
 
 // new added functions
-/*********************************************************
+/*********************************************************/
+void CheckPotentialUsers(std::vector<unsigned long> &usersToCheck) {
+	for (size_t i = 0; i < userNum; ++i) {
+		if (hashedList[i].size() > threshold) {
+			usersToCheck.push_back(i);
+		}
+	}
+}
 
-/*********************************************************
+
+void AddPotentialFriendship(unsigned long targetUser, std::vector<unsigned long> &usersToCheck) {
+
+	bool isNewFriendshipCreated = false;
+	std::vector<unsigned long> updatedUsers;
+
+	std::set<unsigned long> common;
+	for (size_t i = 0; i < usersToCheck.size(); ++i) {
+		if ((targetUser != usersToCheck[i]) &&	// self check not allowed
+				(hashedList[targetUser].find(usersToCheck[i]) == hashedList[targetUser].end())) {	// not friend before
+			common.clear();
+			std::set_intersection(hashedList[targetUser].begin(), hashedList[targetUser].end(),
+					hashedList[usersToCheck[i]].begin(), hashedList[usersToCheck[i]].end(),
+					std::inserter(common, common.begin()));
+
+			if (common.size() > threshold) {	// create new friend
+				hashedList[targetUser].insert(usersToCheck[i]);
+				hashedList[usersToCheck[i]].insert(targetUser);
+				isNewFriendshipCreated = true;
+				updatedUsers.push_back(usersToCheck[i]);
+			}
+		}
+	}
+
+	if (isNewFriendshipCreated) {
+		updatedUsers.push_back(targetUser);	// himself is also updated
+	}
+
+	for (size_t i = 0; i < updatedUsers.size(); ++i) {
+		AddPotentialFriendship(updatedUsers[i], usersToCheck);
+	}
+}
+/*********************************************************/
 
 /**
  * Initialize social network. Clear all global variables
@@ -41,7 +81,7 @@ void Init(unsigned int m) {
 	username_dic.clear();
 	userNum = 0;
 
-	for (int i = 0; i < userNum; ++i) {
+	for (size_t i = 0; i < userNum; ++i) {
 		hashedList[i].clear();
 	}
 	hashedList.clear();
@@ -105,12 +145,23 @@ int AddFriends(const char* pUser1, const char* pUser2) {
 	}
 
 	// Add as mutual friends
-	friendList[user1Id].push_back(user2Id);
-	friendList[user2Id].push_back(user1Id);
+	hashedList[user1Id].insert(user2Id);
+	hashedList[user2Id].insert(user1Id);
 
-	hashedList[user1Id][user2Id] = true;
-	hashedList[user2Id][user1Id] = true;
+	// Find users other than user1 and user2 that has friends larger than threshold (thus may create new friendship)
+	std::vector<unsigned long> usersToCheck;
+	CheckPotentialUsers(usersToCheck);
 
+	// Find potential friendship
+	if (!usersToCheck.empty()) {
+		if (hashedList[user1Id].size() > threshold) {
+			AddPotentialFriendship(user1Id, usersToCheck);
+		}
+
+		if (hashedList[user2Id].size() > threshold) {
+			AddPotentialFriendship(user2Id, usersToCheck);
+		}
+	}
 
 	return 0;
 }
@@ -163,13 +214,22 @@ int main() {
 
 	CreateUser("Jack");
 	CreateUser("Peter");
+	CreateUser("Tom");
+	CreateUser("Mary");
 	CreateUser("Bruce");
 	CreateUser("Smith");
-	CreateUser("Tom");
+	CreateUser("Rose");
 
 	AddFriends("Jack", "Peter");
 	AddFriends("Jack", "Tom");
-	AddFriends("Smith", "Peter");
+	AddFriends("Jack", "Mary");
+	AddFriends("Jack", "Smith");
+	AddFriends("Peter", "Smith");
+	AddFriends("Peter", "Rose");
+	AddFriends("Tom", "Smith");
+	AddFriends("Tom", "Rose");
+	AddFriends("Mary", "Rose");
+	AddFriends("Bruce", "Smith");
 
 	unsigned int num = 0;
 	GetUserFriendNum("Jack", &num);
@@ -179,8 +239,8 @@ int main() {
 	assert(num == 4);
 
 	assert(0 == IsFriend("Jack", "Rose"));
-	assert(0 == IsFriend("Jack", "Frank"));
-	assert(0 == IsFriend("Rose", "Bruce"));
+	assert(0 == IsFriend("Rose", "Smith"));
+	assert(0 == IsFriend("Peter", "Tom"));
 
 	return 0;
 }
